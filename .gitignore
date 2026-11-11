@@ -41,3 +41,6 @@ build/
 /.idea/
 /.mvn/
 /.idea/
+
+### 本地密钥 ###
+docs/dev-ops/api/.env

@@ -12,23 +12,36 @@ thread:
         block-queue-size: 5000
         policy: CallerRunsPolicy
 
-# 数据库配置；启动时配置数据库资源信息
 spring:
-  datasource:
-    username: root
-    password: 123456
-    url: jdbc:mysql://127.0.0.1:3306/xfg_frame_archetype?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  hikari:
-    pool-name: Retail_HikariCP
-    minimum-idle: 15 #最小空闲连接数量
-    idle-timeout: 180000 #空闲连接存活最大时间，默认600000（10分钟）
-    maximum-pool-size: 25 #连接池最大连接数，默认是10
-    auto-commit: true  #此属性控制从池返回的连接的默认自动提交行为,默认值：true
-    max-lifetime: 1800000 #此属性控制池中连接的最长生命周期，值0表示无限生命周期，默认1800000即30分钟
-    connection-timeout: 30000 #数据库连接超时时间,默认30秒，即30000
-    connection-test-query: SELECT 1
-  type: com.zaxxer.hikari.HikariDataSource
+  config:
+    import:
+      # 智能体配置；注意冒号后面【不能有空格】，否则 YAML 会把它解析成 Map，启动时报
+      # 'spring.config.import' ... is not a valid location
+      - "classpath:agent/test-agent.yml"
+      # 本地密钥文件（DEEPSEEK_API_KEY / BAIDU_MCP_API_KEY）；两个路径任选其一生效
+      # 依赖 .env 的 properties 格式，所以用 [.properties] 显式声明扩展名
+      - "optional:file:./docs/dev-ops/api/.env[.properties]"
+      - "optional:file:../docs/dev-ops/api/.env[.properties]"
+
+  # 数据库配置；当前工程还没引入 MySQL 驱动与 MyBatis（相关依赖在 app/pom.xml 里被注释着），
+  # 打开会爆红（com.mysql.cj.jdbc.Driver、com.zaxxer.hikari.HikariDataSource 无法解析）。
+  # 等做到"智能体配置表"那节，把 pom 里 mysql-connector-java / mybatis-spring-boot-starter 两段
+  # 取消注释，再把下面这段一起放开即可。
+  # datasource:
+  #   username: root
+  #   password: 1234
+  #   url: jdbc:mysql://127.0.0.1:3306/xfg_frame_archetype?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+  #   driver-class-name: com.mysql.cj.jdbc.Driver
+  # hikari:
+  #   pool-name: Retail_HikariCP
+  #   minimum-idle: 15 #最小空闲连接数量
+  #   idle-timeout: 180000 #空闲连接存活最大时间，默认600000（10分钟）
+  #   maximum-pool-size: 25 #连接池最大连接数，默认是10
+  #   auto-commit: true  #此属性控制从池返回的连接的默认自动提交行为,默认值：true
+  #   max-lifetime: 1800000 #此属性控制池中连接的最长生命周期，值0表示无限生命周期，默认1800000即30分钟
+  #   connection-timeout: 30000 #数据库连接超时时间,默认30秒，即30000
+  #   connection-test-query: SELECT 1
+  # type: com.zaxxer.hikari.HikariDataSource
 
 # MyBatis 配置【如需使用记得打开】
 #mybatis:
