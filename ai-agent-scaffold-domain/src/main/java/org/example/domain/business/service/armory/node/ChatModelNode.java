@@ -82,8 +82,7 @@ public class ChatModelNode extends AbstractArmorySupport {
         AiAgentConfigTableVO.Module.ChatModel.ToolMcp.StdioServerParameters stdioConfig = toolMcp.getStdio();
 
         if (null != sseConfig) {
-            // http://appbuilder.baidu.com/v2/ai_search/mcp/sse?api_key=bce-v3/ALTAK-JFZXXLpfxhAutDQvJ32Ei/4492c1879b8c2f0df4612ef5b4a52df1c1fba9f7
-
+            // baseUri / sseEndpoint 均来自配置（agent/*.yml），鉴权参数由 ${BAIDU_MCP_API_KEY} 这类占位符注入，代码里不保留任何 key
             String originalBaseUri = sseConfig.getBaseUri();
             String baseUri = originalBaseUri;
             String sseEndpoint = sseConfig.getSseEndpoint();
@@ -106,6 +105,14 @@ public class ChatModelNode extends AbstractArmorySupport {
             }
 
             sseEndpoint = StringUtils.isBlank(sseEndpoint) ? "/sse" : sseEndpoint;
+
+            // MCP 客户端内部用 URI.resolve 拼接地址，要求：
+            // baseUri 以 "/" 结尾、sseEndpoint 不以 "/" 开头，否则路径会被截断
+            // 例：https://mcp.map.baidu.com + sse?ak=x 会被解析成 https://mcp.map.baidu.com/sse?ak=x
+            //     这是对的；但 http://a.com/v2/mcp + sse?ak=x 会变成 http://a.com/v2/sse?ak=x，少了 mcp
+            if (!sseEndpoint.startsWith("/") && !baseUri.endsWith("/")) {
+                baseUri = baseUri + "/";
+            }
 
             HttpClientSseClientTransport sseClientTransport = HttpClientSseClientTransport
                     .builder(baseUri)
