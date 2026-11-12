@@ -182,6 +182,7 @@ public class LoopAgentTest {
                         System.out.println(event.stringifyContent());
                     }
                 });
+
     }
 
 }
