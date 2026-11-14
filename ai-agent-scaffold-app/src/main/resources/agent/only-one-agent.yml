@@ -1,0 +1,35 @@
+ai:
+  agent:
+    config:
+      tables:
+        testAgent:
+          app-name: testAgent02
+          agent:
+            agent-id: 100002
+            agent-name: 单一智能体
+            agent-desc: 单一智能体
+          module:
+            ai-api:
+              # DeepSeek（OpenAI 兼容协议），key 从 .env 读取，不写死在文件里
+              base-url: https://api.deepseek.com
+              api-key: ${DEEPSEEK_API_KEY:}
+              completions-path: v1/chat/completions
+              embeddings-path: v1/embeddings
+            chat-model:
+              model: deepseek-chat
+              tool-mcp-list:
+                - sse:
+                    name: baidu-search
+                    base-uri: http://appbuilder.baidu.com/v2/ai_search/mcp/
+                    # key 在 https://console.bce.baidu.com/iam/#/iam/apikey/list 申请，填到 .env
+                    sse-endpoint: sse?api_key=${BAIDU_MCP_API_KEY:}
+                    request-timeout: 5000
+            agents:
+              - name: onlyAgent
+                description: 学习项目计划
+                instruction: |
+                  通过百度检索小傅哥编程实战项目，并根据检索内容，针对初学用户给出学习计划。
+                  调用搜索工具时只允许传 query 和 resource_type_filter 参数，禁止传 model、instruction、temperature、top_p 等可选参数（传 model 会触发百度 invalid_appId 权限错误）。
+                output-key: generated_code
+            runner:
+              agent-name: onlyAgent

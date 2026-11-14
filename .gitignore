@@ -44,3 +44,6 @@ build/
 
 ### 本地密钥 ###
 docs/dev-ops/api/.env
+
+### 运行日志
+**/data/log/

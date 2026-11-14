@@ -1,6 +1,7 @@
 package org.example.domain.business.service.armory.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -17,10 +18,13 @@ import org.example.domain.agent.model.valobj.AiAgentRegisterVO;
 import org.example.domain.business.service.armory.AbstractArmorySupport;
 import org.example.domain.business.service.armory.factory.DefaultArmoryFactory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -28,6 +32,8 @@ import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * @author dabuw
@@ -56,13 +62,17 @@ public class ChatModelNode extends AbstractArmorySupport {
             mcpSyncClients.add(createMcpSyncClient(toolMcp));
         }
 
+        // [DeepSeek 修改] 对 MCP 工具回调做参数过滤，避免模型自己填上百度不认的可选参数
+        // 详见文件末尾 SafeToolCallback 的说明
+        ToolCallback[] toolCallbacks = SafeToolCallback.wrap(SyncMcpToolCallbackProvider.builder()
+                .mcpClients(mcpSyncClients).build()
+                .getToolCallbacks());
+
         ChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(chatModelConfig.getModel())
-                        .toolCallbacks(SyncMcpToolCallbackProvider.builder()
-                                .mcpClients(mcpSyncClients).build()
-                                .getToolCallbacks())
+                        .toolCallbacks(toolCallbacks)
                         .build())
                 .build();
 
@@ -147,6 +157,76 @@ public class ChatModelNode extends AbstractArmorySupport {
         }
 
         throw new RuntimeException("tool mcp sse and stdio is null!");
+    }
+
+    /**
+     * [DeepSeek 修改] MCP 工具回调包装器：对模型传入的工具参数做黑名单过滤。
+     * <p>
+     * 背景：百度 AI 搜索工具（AIsearch）的入参 schema 里有若干可选参数，其中 model 会被 DeepSeek
+     * 偶尔自动填上（例如 "deepseek-chat"）。百度侧会拿这个参数去校验 AppBuilder 应用的模型权限，
+     * 返回 {"code":"invalid_appId","message":"No permission to use the appId"}；而 MCP 又把这段
+     * 错误当成正常文本返回，模型只能读到一段错误 JSON，对外就表现成"搜索服务不可用 / 权限问题"。
+     * <p>
+     * 这些参数对工具本身可有可无，直接丢弃即可；query、resource_type_filter 等有效参数照常透传。
+     * 包装是通用的，对地图等其它 MCP 工具没有影响（它们本来也不用这几个参数）。
+     */
+    private static final class SafeToolCallback implements ToolCallback {
+
+        /** 百度 AI 搜索不认、会触发 invalid_appId 的可选参数 */
+        private static final Set<String> BLOCKED_KEYS = Set.of("model", "instruction", "temperature", "top_p");
+
+        private static final ObjectMapper MAPPER = new ObjectMapper();
+
+        private final ToolCallback delegate;
+
+        private SafeToolCallback(ToolCallback delegate) {
+            this.delegate = delegate;
+        }
+
+        private static ToolCallback[] wrap(ToolCallback[] callbacks) {
+            ToolCallback[] wrapped = new ToolCallback[callbacks.length];
+            for (int i = 0; i < callbacks.length; i++) {
+                wrapped[i] = new SafeToolCallback(callbacks[i]);
+            }
+            return wrapped;
+        }
+
+        @Override
+        public ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            return delegate.call(filter(toolInput));
+        }
+
+        @Override
+        public String call(String toolInput, ToolContext toolContext) {
+            return delegate.call(filter(toolInput), toolContext);
+        }
+
+        private String filter(String toolInput) {
+            if (StringUtils.isBlank(toolInput)) {
+                return toolInput;
+            }
+            try {
+                log.debug("[DeepSeek 修改] 工具原始参数: {}", toolInput);
+                Map<String, Object> args = MAPPER.readValue(toolInput, new TypeReference<Map<String, Object>>() {
+                });
+                if (args == null) {
+                    return toolInput;
+                }
+                boolean removed = args.keySet().removeAll(BLOCKED_KEYS);
+                if (removed) {
+                    log.info("[DeepSeek 修改] 已过滤工具参数，剩余参数: {}", args.keySet());
+                }
+                return MAPPER.writeValueAsString(args);
+            } catch (Exception e) {
+                log.warn("[DeepSeek 修改] 工具参数过滤失败，按原参数透传: {}", e.getMessage());
+                return toolInput;
+            }
+        }
     }
 
 }
