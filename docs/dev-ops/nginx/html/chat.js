@@ -1,57 +1,162 @@
 (function () {
   'use strict';
 
-  const cookieName = 'ai_agent_demo_user';
+  var cookieName = 'ai_agent_demo_user';
+  var storageKey = 'ai_agent_api_config';
 
   function getUser() {
-    const cookie = document.cookie.split(';').map(part => part.trim())
-      .find(part => part.startsWith(cookieName + '='));
+    var cookie = document.cookie.split(';').map(function (part) { return part.trim(); })
+      .find(function (part) { return part.startsWith(cookieName + '='); });
     return cookie ? cookie.slice(cookieName.length + 1) : '';
   }
 
-  const userId = getUser();
+  var userId = getUser();
   if (userId !== 'admin') {
     location.replace('login.html');
     return;
   }
 
-  const agentSelect = document.getElementById('agent-select');
-  const reloadAgents = document.getElementById('reload-agents');
-  const messageInput = document.getElementById('message');
-  const sendButton = document.getElementById('send');
-  const status = document.getElementById('status');
-  const messages = document.getElementById('messages');
-  const chatScroll = document.getElementById('chat-scroll');
-  const welcome = document.getElementById('welcome');
-  let busy = false;
+  var agentSelect = document.getElementById('agent-select');
+  var reloadAgents = document.getElementById('reload-agents');
+  var messageInput = document.getElementById('message');
+  var sendButton = document.getElementById('send');
+  var status = document.getElementById('status');
+  var messages = document.getElementById('messages');
+  var chatScroll = document.getElementById('chat-scroll');
+  var welcome = document.getElementById('welcome');
+  var apiEntry = document.getElementById('api-entry');
+  var apiEntryTitle = document.getElementById('api-entry-title');
+  var apiEntryDesc = document.getElementById('api-entry-desc');
+  var apiEntryState = document.getElementById('api-entry-state');
+  var sessionHint = document.getElementById('session-hint');
+  var settingsModal = document.getElementById('settings-modal');
+  var cfgBase = document.getElementById('cfg-base');
+  var cfgKey = document.getElementById('cfg-key');
+  var cfgModel = document.getElementById('cfg-model');
+  var cfgStatus = document.getElementById('cfg-status');
+
+  var state = {
+    busy: false,
+    sessionId: null,
+    history: []
+  };
 
   document.getElementById('account-name').textContent = userId;
 
-  function setControls() {
-    const ready = Boolean(agentSelect.value) && !busy;
-    agentSelect.disabled = busy || agentSelect.options.length === 0;
-    messageInput.disabled = !ready;
-    sendButton.disabled = !ready;
+  /* ---------------- API 配置 ---------------- */
+
+  function loadConfig() {
+    try {
+      var raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      var cfg = JSON.parse(raw);
+      if (!cfg || !cfg.apiBaseUrl || !cfg.apiKey) return null;
+      return cfg;
+    } catch (e) {
+      return null;
+    }
   }
 
-  async function request(path, body) {
+  function currentConfig() {
+    return loadConfig();
+  }
+
+  function refreshBadge() {
+    var cfg = currentConfig();
+    if (cfg) {
+      apiEntry.classList.add('configured');
+      apiEntryTitle.textContent = '使用我的 API';
+      apiEntryDesc.textContent = (cfg.model || '默认模型') + ' · 只保存在本机浏览器';
+      apiEntryState.textContent = '已连接';
+    } else {
+      apiEntry.classList.remove('configured');
+      apiEntryTitle.textContent = '接入我的 API';
+      apiEntryDesc.textContent = '使用你自己的模型 Key，只保存在本机浏览器';
+      apiEntryState.textContent = '未配置';
+    }
+    sessionHint.textContent = cfg ? '当前使用你自己的 API Key。' : '每次提问将创建新的会话。';
+  }
+
+  function apiFields() {
+    var cfg = currentConfig();
+    if (!cfg) return {};
+    return { apiBaseUrl: cfg.apiBaseUrl, apiKey: cfg.apiKey, model: cfg.model || '' };
+  }
+
+  /* ---------------- 请求 ---------------- */
+
+  function baseUrl() {
     if (!window.AGENT_CONFIG || typeof window.AGENT_CONFIG.apiBaseUrl !== 'string' || !window.AGENT_CONFIG.apiBaseUrl.trim()) {
       throw new Error('接口地址未配置，请检查 config.js。');
     }
-    const base = window.AGENT_CONFIG.apiBaseUrl.replace(/\/+$/, '');
-    const options = body === undefined ? {} : {
+    return window.AGENT_CONFIG.apiBaseUrl.replace(/\/+$/, '');
+  }
+
+  async function request(path, body) {
+    var options = body === undefined ? {} : {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     };
-    const response = await fetch(base + '/api/v1/' + path, options);
-    if (!response.ok) throw new Error('接口请求失败（HTTP ' + response.status + '）。');
-    const result = await response.json();
+    var response = await fetch(baseUrl() + '/api/v1/' + path, options);
+    var result = null;
+    try {
+      result = await response.json();
+    } catch (e) {
+      throw new Error('接口返回异常（HTTP ' + response.status + '）。');
+    }
     if (!result || result.code !== '0000') {
-      throw new Error(result && result.info ? result.info : '接口返回异常，请稍后重试。');
+      throw new Error((result && result.info) || ('接口返回异常（' + result.code + '）。'));
     }
     return result.data;
   }
+
+  /* ---------------- 渲染 ---------------- */
+
+  function renderMarkdown(text) {
+    if (window.AgentMarkdown) return window.AgentMarkdown.render(text);
+    return String(text).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+
+  function addMessage(role, name, content, stateFlag) {
+    welcome.hidden = true;
+    var item = document.createElement('article');
+    item.className = 'message ' + role + (stateFlag ? ' ' + stateFlag : '');
+
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar ' + (role === 'assistant' ? 'assistant-avatar' : 'user-avatar');
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = role === 'assistant' ? '✦' : userId.charAt(0).toUpperCase();
+
+    var body = document.createElement('div');
+    body.className = 'message-body';
+    var meta = document.createElement('div');
+    meta.className = 'message-meta';
+    meta.textContent = name;
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (role === 'assistant') {
+      bubble.innerHTML = renderMarkdown(content);
+    } else {
+      bubble.textContent = content;
+    }
+
+    body.append(meta, bubble);
+    item.append(avatar, body);
+    messages.appendChild(item);
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+    return { item: item, bubble: bubble };
+  }
+
+  function setControls() {
+    var ready = Boolean(agentSelect.value) && !state.busy;
+    agentSelect.disabled = state.busy || agentSelect.options.length === 0;
+    messageInput.disabled = !ready;
+    sendButton.disabled = !ready;
+  }
+
+  /* ---------------- 智能体 ---------------- */
 
   async function loadAgents() {
     agentSelect.replaceChildren();
@@ -61,17 +166,16 @@
     reloadAgents.hidden = true;
     status.textContent = '';
     try {
-      const agents = await request('query_ai_agent_config_list');
+      var agents = await request('query_ai_agent_config_list');
       if (!Array.isArray(agents)) throw new Error('智能体列表格式不正确。');
-      for (const agent of agents) {
-        if (!agent || typeof agent.agentId !== 'string' || !agent.agentId || typeof agent.agentName !== 'string' || !agent.agentName) {
-          throw new Error('智能体信息不完整，请检查服务配置。');
-        }
-        const option = document.createElement('option');
+      agents.forEach(function (agent) {
+        if (!agent || typeof agent.agentId !== 'string' || !agent.agentId) return;
+        var option = document.createElement('option');
         option.value = agent.agentId;
-        option.textContent = agent.agentName;
+        option.textContent = agent.agentName || agent.agentId;
+        if (agent.agentDesc) option.title = agent.agentDesc;
         agentSelect.appendChild(option);
-      }
+      });
       if (!agents.length) {
         status.textContent = '暂无可用智能体，请检查服务配置。';
         reloadAgents.hidden = false;
@@ -84,74 +188,237 @@
     setControls();
   }
 
-  function addMessage(role, name, content, state) {
-    welcome.hidden = true;
-    const item = document.createElement('article');
-    item.className = 'message ' + role + (state ? ' ' + state : '');
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar ' + (role === 'assistant' ? 'assistant-avatar' : 'user-avatar');
-    avatar.setAttribute('aria-hidden', 'true');
-    avatar.textContent = role === 'assistant' ? '✦' : userId.charAt(0).toUpperCase();
-    const body = document.createElement('div');
-    body.className = 'message-body';
-    const meta = document.createElement('div');
-    meta.className = 'message-meta';
-    meta.textContent = name;
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = content;
-    body.append(meta, bubble);
-    item.append(avatar, body);
-    messages.appendChild(item);
-    chatScroll.scrollTop = chatScroll.scrollHeight;
-    return { item, bubble };
+  /* ---------------- 会话 ---------------- */
+
+  async function ensureSession() {
+    if (state.sessionId) return state.sessionId;
+    var data = await request('create_session', Object.assign({
+      agentId: agentSelect.value,
+      userId: userId
+    }, apiFields()));
+    if (!data || !data.sessionId) throw new Error('创建会话失败，请稍后重试。');
+    state.sessionId = data.sessionId;
+    return state.sessionId;
+  }
+
+  function resetChat() {
+    state.sessionId = null;
+    state.history = [];
+    messages.replaceChildren();
+    welcome.hidden = false;
+    status.textContent = '';
+  }
+
+  /* ---------------- 发送（流式） ---------------- */
+
+  async function streamReply(payload, onChunk) {
+    var response = await fetch(baseUrl() + '/api/v1/chat_stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok || !response.body) {
+      var info = '';
+      try {
+        var parsed = await response.json();
+        info = parsed && parsed.info ? parsed.info : '';
+      } catch (e) { /* ignore */ }
+      throw new Error(info || ('流式请求失败（HTTP ' + response.status + '）'));
+    }
+
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder('utf-8');
+    var full = '';
+
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      var text = decoder.decode(chunk.value, { stream: true });
+      if (!text) continue;
+      full += text;
+      onChunk(text, full);
+    }
+    return full;
   }
 
   async function submitMessage(event) {
     event.preventDefault();
-    const message = messageInput.value.trim();
-    if (busy || !agentSelect.value || !message) return;
-    if (getUser() !== userId) {
-      location.replace('login.html');
-      return;
-    }
-    const agentId = agentSelect.value;
-    const agentName = agentSelect.options[agentSelect.selectedIndex].textContent;
-    busy = true;
+    var message = messageInput.value.trim();
+    if (state.busy || !agentSelect.value || !message) return;
+
+    var agentName = agentSelect.options[agentSelect.selectedIndex].textContent;
+
+    state.busy = true;
     setControls();
     status.textContent = '';
+
     addMessage('user', userId, message);
+    state.history.push({ role: 'user', name: userId, text: message });
     messageInput.value = '';
     messageInput.style.height = '';
-    const reply = addMessage('assistant', agentName, '正在思考...', 'pending');
+
+    var reply = addMessage('assistant', agentName, '', 'pending');
+    reply.bubble.classList.add('streaming');
+
     try {
-      const session = await request('create_session', { agentId, userId });
-      if (!session || typeof session.sessionId !== 'string' || !session.sessionId) {
-        throw new Error('创建会话未返回有效的会话 ID。');
-      }
-      const response = await request('chat', { agentId, userId, sessionId: session.sessionId, message });
-      if (!response || typeof response.content !== 'string' || !response.content.trim()) {
-        throw new Error('智能体未返回有效的回复。');
-      }
-      reply.bubble.textContent = response.content;
+      var sessionId = await ensureSession();
+
+      var payload = Object.assign({
+        agentId: agentSelect.value,
+        userId: userId,
+        sessionId: sessionId,
+        message: message
+      }, apiFields());
+
+      var full = '';
+      var finalText = await streamReply(payload, function (_, accumulated) {
+        full = accumulated;
+        reply.bubble.textContent = accumulated;
+        chatScroll.scrollTop = chatScroll.scrollHeight;
+      });
+
       reply.item.classList.remove('pending');
+      reply.bubble.classList.remove('streaming');
+      reply.bubble.innerHTML = renderMarkdown(finalText || full || '（无回复内容）');
+      state.history.push({ role: 'assistant', name: agentName, text: finalText || full });
     } catch (error) {
       reply.item.classList.remove('pending');
+      reply.bubble.classList.remove('streaming');
       reply.item.classList.add('error');
       reply.bubble.textContent = '请求失败：' + error.message;
-      status.textContent = '请检查服务状态后重新发送。';
+      status.textContent = '请检查 API 配置或稍后重试。';
       messageInput.value = message;
     } finally {
-      busy = false;
+      state.busy = false;
       setControls();
       chatScroll.scrollTop = chatScroll.scrollHeight;
       messageInput.focus();
     }
   }
 
+  /* ---------------- 对话管理 ---------------- */
+
+  function newChat() {
+    if (state.history.length && !window.confirm('确定要开始新对话吗？当前对话会被清空。')) return;
+    resetChat();
+    messageInput.focus();
+  }
+
+  function exportChat() {
+    if (!state.history.length) {
+      status.textContent = '当前还没有对话内容可以导出。';
+      return;
+    }
+    var lines = ['# AI Agent 对话记录', '', '导出时间：' + new Date().toLocaleString('zh-CN'), ''];
+    state.history.forEach(function (item) {
+      lines.push('### ' + (item.role === 'user' ? '我' : item.name));
+      lines.push('');
+      lines.push(item.text);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    });
+
+    var blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'chat-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.md';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  /* ---------------- 设置弹窗 ---------------- */
+
+  function openSettings() {
+    var cfg = currentConfig();
+    cfgBase.value = cfg ? cfg.apiBaseUrl : '';
+    cfgKey.value = cfg ? cfg.apiKey : '';
+    cfgModel.value = cfg ? (cfg.model || '') : '';
+    cfgStatus.textContent = '';
+    cfgStatus.className = 'modal-status';
+    settingsModal.hidden = false;
+    cfgBase.focus();
+  }
+
+  function closeSettings() {
+    settingsModal.hidden = true;
+  }
+
+  function readFormConfig() {
+    return {
+      apiBaseUrl: cfgBase.value.trim(),
+      apiKey: cfgKey.value.trim(),
+      model: cfgModel.value.trim()
+    };
+  }
+
+  async function testConnection() {
+    var cfg = readFormConfig();
+    if (!cfg.apiBaseUrl || !cfg.apiKey) {
+      cfgStatus.textContent = '请先填写 Base URL 和 API Key。';
+      cfgStatus.className = 'modal-status error';
+      return;
+    }
+    cfgStatus.textContent = '正在测试连接...';
+    cfgStatus.className = 'modal-status';
+    try {
+      var reply = await request('test_api', cfg);
+      cfgStatus.textContent = '连接成功' + (reply ? '：' + reply : '。');
+      cfgStatus.className = 'modal-status ok';
+    } catch (error) {
+      cfgStatus.textContent = '连接失败：' + error.message;
+      cfgStatus.className = 'modal-status error';
+    }
+  }
+
+  function saveConfig() {
+    var cfg = readFormConfig();
+    if (!cfg.apiBaseUrl || !cfg.apiKey) {
+      cfgStatus.textContent = 'Base URL 与 API Key 都必须填写。';
+      cfgStatus.className = 'modal-status error';
+      return;
+    }
+    localStorage.setItem(storageKey, JSON.stringify(cfg));
+    refreshBadge();
+    cfgStatus.textContent = '已保存，本次对话将从下一轮开始使用你的配置。';
+    cfgStatus.className = 'modal-status ok';
+    resetChat();
+  }
+
+  function clearConfig() {
+    localStorage.removeItem(storageKey);
+    cfgBase.value = '';
+    cfgKey.value = '';
+    cfgModel.value = '';
+    refreshBadge();
+    cfgStatus.textContent = '已清除，将使用服务端默认模型。';
+    cfgStatus.className = 'modal-status ok';
+    resetChat();
+  }
+
+  /* ---------------- 事件绑定 ---------------- */
+
   document.getElementById('chat-form').addEventListener('submit', submitMessage);
   agentSelect.addEventListener('change', setControls);
   reloadAgents.addEventListener('click', loadAgents);
+  document.getElementById('new-chat').addEventListener('click', newChat);
+  document.getElementById('export-chat').addEventListener('click', exportChat);
+  apiEntry.addEventListener('click', openSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('cfg-test').addEventListener('click', testConnection);
+  document.getElementById('cfg-save').addEventListener('click', saveConfig);
+  document.getElementById('cfg-clear').addEventListener('click', clearConfig);
+  settingsModal.addEventListener('click', function (event) {
+    if (event.target === settingsModal) closeSettings();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !settingsModal.hidden) closeSettings();
+  });
+
   messageInput.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
@@ -163,7 +430,7 @@
     }
   });
   document.getElementById('logout').addEventListener('click', function () {
-    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    var secure = location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = cookieName + '=; Path=/; Max-Age=0; SameSite=Strict' + secure;
     if (getUser()) {
       status.textContent = '无法清除登录信息，请检查浏览器 Cookie 设置。';
@@ -172,5 +439,6 @@
     location.replace('login.html');
   });
 
+  refreshBadge();
   loadAgents();
 }());

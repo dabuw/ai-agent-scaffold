@@ -63,6 +63,12 @@ public class DefaultArmoryFactory {
          * LLM ChatModel
          */
         private ChatModel chatModel;
+
+        /** 覆盖模型名称；为空时使用配置里的 model */
+        private String overrideModel;
+
+        /** 为 true 时不把装配结果注册成 Spring Bean（用户自带 API 的场景） */
+        private boolean skipRegisterBean;
         /**
          * 智能体配置组
          */

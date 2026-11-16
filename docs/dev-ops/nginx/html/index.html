@@ -12,6 +12,7 @@
     }
   </script>
   <script src="config.js" defer></script>
+  <script src="markdown.js" defer></script>
   <script src="chat.js" defer></script>
 </head>
 <body>
@@ -32,6 +33,19 @@
         </div>
       </div>
 
+      <button class="api-entry" id="api-entry" type="button" aria-haspopup="dialog" aria-label="接入我的 API">
+        <span class="api-entry-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.2"/><path d="M11.2 12H20m-3 0v3m-3-3v2"/></svg>
+        </span>
+        <span class="api-entry-text">
+          <span class="api-entry-head">
+            <strong id="api-entry-title">接入我的 API</strong>
+            <span class="api-entry-state" id="api-entry-state">未配置</span>
+          </span>
+          <span id="api-entry-desc">使用你自己的模型 Key，只保存在本机浏览器</span>
+        </span>
+      </button>
+
       <div class="account">
         <div class="avatar user-avatar" aria-hidden="true">A</div>
         <div class="account-info"><strong id="account-name">admin</strong><span>演示账号</span></div>
@@ -43,11 +57,21 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div><div class="breadcrumb">WORKSPACE <span>/</span> AI CHAT</div><h1>智能对话</h1></div>
-        <div class="agent-picker">
-          <label for="agent-select">当前智能体</label>
-          <select id="agent-select" disabled><option value="">正在加载...</option></select>
-          <button id="reload-agents" type="button" hidden>重试</button>
+        <div class="topbar-left"><div class="breadcrumb">WORKSPACE <span>/</span> AI CHAT</div><h1>智能对话</h1></div>
+        <div class="topbar-right">
+          <div class="agent-picker">
+            <label for="agent-select">当前智能体</label>
+            <select id="agent-select" disabled><option value="">正在加载...</option></select>
+            <button id="reload-agents" type="button" hidden>重试</button>
+          </div>
+          <div class="topbar-actions">
+            <button id="new-chat" class="icon-btn" type="button" title="新建对话" aria-label="新建对话">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button id="export-chat" class="icon-btn" type="button" title="导出对话" aria-label="导出对话">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+            </button>
+</div>
         </div>
       </header>
 
@@ -70,16 +94,45 @@
             <label class="sr-only" for="message">输入消息</label>
             <textarea id="message" rows="1" placeholder="输入你的问题，开启一段对话..." disabled></textarea>
             <div class="composer-bottom">
-              <span><span class="composer-sparkle">✧</span> AI Agent 为你提供灵感与帮助</span>
+              <span><span class="composer-sparkle">✧</span> Enter 发送 · Shift + Enter 换行</span>
               <button id="send" class="send" type="submit" disabled aria-label="发送消息">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
             </div>
           </form>
-          <p class="disclaimer">内容由 AI 生成，请仔细甄别重要信息。<span>每次提问将创建新的会话。</span></p>
+          <p class="disclaimer">内容由 AI 生成，请仔细甄别重要信息。<span id="session-hint">每次提问将创建新的会话。</span></p>
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- API 设置弹窗 -->
+  <div class="modal" id="settings-modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">API 设置</h2>
+        <button class="modal-close" id="settings-close" type="button" aria-label="关闭">×</button>
+      </div>
+      <p class="modal-desc">接入你自己的模型服务（需兼容 OpenAI 协议）。Key 只保存在本机浏览器，不会长期存储在服务器。</p>
+
+      <label class="modal-field">Base URL
+        <input id="cfg-base" type="text" placeholder="https://api.deepseek.com" autocomplete="off">
+      </label>
+      <label class="modal-field">API Key
+        <input id="cfg-key" type="password" placeholder="sk-..." autocomplete="off">
+      </label>
+      <label class="modal-field">模型
+        <input id="cfg-model" type="text" placeholder="deepseek-chat" autocomplete="off">
+      </label>
+
+      <p class="modal-status" id="cfg-status" role="status"></p>
+
+      <div class="modal-actions">
+        <button id="cfg-test" class="ghost" type="button">测试连接</button>
+        <button id="cfg-clear" class="ghost" type="button">清除</button>
+        <button id="cfg-save" class="primary" type="button">保存</button>
+      </div>
+    </div>
   </div>
 </body>
 </html>

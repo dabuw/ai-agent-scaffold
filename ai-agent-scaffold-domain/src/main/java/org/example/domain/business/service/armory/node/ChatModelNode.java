@@ -83,7 +83,9 @@ public class ChatModelNode extends AbstractArmorySupport {
         ChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
-                        .model(chatModelConfig.getModel())
+                        .model(StringUtils.isNotBlank(dynamicContext.getOverrideModel())
+                                ? dynamicContext.getOverrideModel()
+                                : chatModelConfig.getModel())
                         .toolCallbacks(toolCallbackList)
                         .build())
                 .build();

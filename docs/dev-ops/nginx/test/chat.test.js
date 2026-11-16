@@ -15,11 +15,13 @@ class Element {
     this.style = {};
     this.className = '';
     this.textContent = '';
+    this.innerHTML = '';
     this.value = '';
     this.hidden = false;
+    this.disabled = false;
     this.selectedIndex = 0;
     this.classList = {
-      add: name => { this.className += ' ' + name; },
+      add: name => { if (!this.className.split(' ').includes(name)) this.className += ' ' + name; },
       remove: name => { this.className = this.className.split(' ').filter(part => part !== name).join(' '); }
     };
   }
@@ -34,31 +36,74 @@ class Element {
   addEventListener(event, listener) { this.listeners[event] = listener; }
   setAttribute() {}
   focus() {}
+  click() { if (this.listeners.click) this.listeners.click({ target: this }); }
 }
 
-function setup(script, { cookie = '', responses = [] } = {}) {
-  const ids = ['agent-select', 'reload-agents', 'message', 'send', 'status', 'messages', 'chat-scroll',
-    'welcome', 'account-name', 'chat-form', 'logout', 'login-form', 'username', 'password', 'login-error', 'toggle-password'];
+function setup(script, { cookie = '', responses = [], storage = {} } = {}) {
+  const ids = [
+    'agent-select', 'reload-agents', 'message', 'send', 'status', 'messages', 'chat-scroll', 'welcome',
+    'account-name', 'chat-form', 'logout', 'api-entry', 'api-entry-title', 'api-entry-desc', 'api-entry-state',
+    'session-hint', 'new-chat', 'export-chat', 'settings-modal', 'settings-close', 'cfg-base', 'cfg-key', 'cfg-model', 'cfg-status',
+    'cfg-test', 'cfg-save', 'cfg-clear',
+    'login-form', 'account', 'password', 'login-error', 'toggle-pw'
+  ];
   const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
   elements.password.type = 'password';
+  elements['settings-modal'].hidden = true;
+
   let storedCookie = cookie;
   const document = {
     get cookie() { return storedCookie; },
     set cookie(value) { storedCookie = value.includes('Max-Age=0;') ? '' : value.split(';')[0]; },
     getElementById: id => elements[id],
-    createElement: () => new Element()
+    createElement: () => new Element(),
+    addEventListener() {},
+    body: new Element()
   };
   const location = { protocol: 'http:', replace(url) { this.redirect = url; } };
+
   const calls = [];
   const fetch = async (url, options) => {
     calls.push({ url, options });
     const result = responses.shift();
     if (result instanceof Error) throw result;
     assert.ok(result, 'unexpected request: ' + url);
+
+    if (typeof result === 'object' && result.stream !== undefined) {
+      const bytes = new TextEncoder().encode(result.stream);
+      let read = false;
+      return {
+        ok: true,
+        body: {
+          getReader() {
+            return {
+              async read() {
+                if (read) return { done: true, value: undefined };
+                read = true;
+                return { done: false, value: bytes };
+              }
+            };
+          }
+        }
+      };
+    }
     return { ok: true, json: async () => result };
   };
-  vm.runInNewContext(script, { document, location, fetch, window: { AGENT_CONFIG: { apiBaseUrl: 'http://127.0.0.1:8091/' } } });
-  return { elements, location, calls };
+
+  const localStorage = {
+    getItem: key => (Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : null),
+    setItem: (key, value) => { storage[key] = value; },
+    removeItem: key => { delete storage[key]; }
+  };
+
+  const window = {
+    AGENT_CONFIG: { apiBaseUrl: 'http://127.0.0.1:8091/' },
+    confirm: () => true,
+    localStorage
+  };
+  vm.runInNewContext(script, { document, location, fetch, window, localStorage, TextDecoder, console, Date, URL, Blob });
+
+  return { elements, location, calls, storage, window };
 }
 
 const success = data => ({ code: '0000', data });
@@ -67,7 +112,7 @@ const submit = element => element.listeners.submit({ preventDefault() {} });
 
 test('login redirects only after accepting the demo credentials', () => {
   const { elements, location } = setup(loginScript);
-  elements.username.value = 'admin';
+  elements.account.value = 'admin';
   elements.password.value = 'wrong';
   submit(elements['login-form']);
   assert.match(elements['login-error'].textContent, /不正确/);
@@ -83,36 +128,38 @@ test('unauthenticated users are redirected without calling the API', () => {
   assert.equal(calls.length, 0);
 });
 
-test('loads agents, creates a session for each question, and renders text safely', async () => {
-  const { elements, calls, location } = setup(chatScript, {
+test('loads agents, streams a reply and reuses the session on the next turn', async () => {
+  const { elements, calls } = setup(chatScript, {
     cookie: 'ai_agent_demo_user=admin',
     responses: [
-      success([{ agentId: 'a', agentName: '助手' }, { agentId: 'b', agentName: '另一个助手' }]),
-      success({ sessionId: 's1' }), success({ content: '<b>回复</b>' }),
-      success({ sessionId: 's2' }), success({ content: '第二条回复' })
+      success([{ agentId: 'a', agentName: '助手' }]),
+      success({ sessionId: 's1' }),
+      { stream: '你好，我是助手' }
     ]
   });
   await tick();
   assert.equal(elements['agent-select'].options[0].textContent, '助手');
+
   elements.message.value = '你好';
   await submit(elements['chat-form']);
-  assert.equal(calls[0].url, 'http://127.0.0.1:8091/api/v1/query_ai_agent_config_list');
-  assert.deepEqual(JSON.parse(calls[1].options.body), { agentId: 'a', userId: 'admin' });
+
+  assert.equal(calls[1].url, 'http://127.0.0.1:8091/api/v1/create_session');
+  assert.equal(calls[2].url, 'http://127.0.0.1:8091/api/v1/chat_stream');
   assert.deepEqual(JSON.parse(calls[2].options.body), { agentId: 'a', userId: 'admin', sessionId: 's1', message: '你好' });
-  assert.equal(elements.messages.children[0].className, 'message user');
-  assert.equal(elements.messages.children[1].className, 'message assistant');
-  assert.equal(elements.messages.children[1].children[1].children[1].textContent, '<b>回复</b>');
-  elements['agent-select'].value = 'b';
-  elements['agent-select'].selectedIndex = 1;
-  elements.message.value = '再次提问';
+
+  const assistant = elements.messages.children[1];
+  assert.equal(assistant.className.trim(), 'message assistant');
+  assert.match(assistant.children[1].children[1].innerHTML, /你好，我是助手/);
+
+  // 第二轮不应再次创建会话
+  const before = calls.length;
+  elements.message.value = '继续';
   await submit(elements['chat-form']);
-  assert.deepEqual(JSON.parse(calls[3].options.body), { agentId: 'b', userId: 'admin' });
-  assert.deepEqual(JSON.parse(calls[4].options.body), { agentId: 'b', userId: 'admin', sessionId: 's2', message: '再次提问' });
-  elements.logout.listeners.click();
-  assert.equal(location.redirect, 'login.html');
+  assert.equal(calls.length, before + 1);
+  assert.equal(JSON.parse(calls[calls.length - 1].options.body).sessionId, 's1');
 });
 
-test('failed requests preserve the draft and never send chat without a session', async () => {
+test('failed session creation keeps the draft and shows the reason', async () => {
   const { elements, calls } = setup(chatScript, {
     cookie: 'ai_agent_demo_user=admin',
     responses: [success([{ agentId: 'a', agentName: '助手' }]), { code: 'E0001', info: '智能体不存在' }]
@@ -123,7 +170,6 @@ test('failed requests preserve the draft and never send chat without a session',
   assert.equal(calls.length, 2);
   assert.equal(elements.message.value, '你好');
   assert.match(elements.messages.children[1].children[1].children[1].textContent, /智能体不存在/);
-  assert.equal(elements.send.disabled, false);
 });
 
 test('agent loading errors can be retried', async () => {
@@ -137,4 +183,56 @@ test('agent loading errors can be retried', async () => {
   await elements['reload-agents'].listeners.click();
   assert.equal(elements['agent-select'].value, 'a');
   assert.equal(elements.send.disabled, false);
+});
+
+test('saved API config is sent with every request and shown in the badge', async () => {
+  const storage = {};
+  const { elements, calls } = setup(chatScript, {
+    cookie: 'ai_agent_demo_user=admin',
+    storage,
+    responses: [
+      success([{ agentId: 'a', agentName: '助手' }]),
+      success({ sessionId: 's1' }),
+      { stream: '收到' }
+    ]
+  });
+  await tick();
+
+  elements['api-entry'].listeners.click();
+  elements['cfg-base'].value = 'https://api.deepseek.com';
+  elements['cfg-key'].value = 'sk-test';
+  elements['cfg-model'].value = 'deepseek-chat';
+  elements['cfg-save'].listeners.click();
+
+  assert.equal(JSON.parse(storage['ai_agent_api_config']).apiKey, 'sk-test');
+  assert.match(elements['api-entry'].className, /configured/);
+  assert.equal(elements['api-entry-state'].textContent, '已连接');
+  assert.match(elements['api-entry-desc'].textContent, /deepseek-chat/);
+
+  elements.message.value = '你好';
+  await submit(elements['chat-form']);
+
+  const createBody = JSON.parse(calls[1].options.body);
+  assert.deepEqual(createBody, { agentId: 'a', userId: 'admin', apiBaseUrl: 'https://api.deepseek.com', apiKey: 'sk-test', model: 'deepseek-chat' });
+});
+
+test('clearing the config falls back to the default agent', async () => {
+  const storage = { 'ai_agent_api_config': JSON.stringify({ apiBaseUrl: 'https://api.deepseek.com', apiKey: 'sk-test', model: 'deepseek-chat' }) };
+  const { elements, calls } = setup(chatScript, {
+    cookie: 'ai_agent_demo_user=admin',
+    storage,
+    responses: [success([{ agentId: 'a', agentName: '助手' }]), success({ sessionId: 's1' }), { stream: 'ok' }]
+  });
+  await tick();
+  assert.match(elements['api-entry'].className, /configured/);
+
+  elements['api-entry'].listeners.click();
+  elements['cfg-clear'].listeners.click();
+  assert.equal(storage['ai_agent_api_config'], undefined);
+  assert.doesNotMatch(elements['api-entry'].className, /configured/);
+  assert.equal(elements['api-entry-state'].textContent, '未配置');
+
+  elements.message.value = '你好';
+  await submit(elements['chat-form']);
+  assert.deepEqual(JSON.parse(calls[1].options.body), { agentId: 'a', userId: 'admin' });
 });

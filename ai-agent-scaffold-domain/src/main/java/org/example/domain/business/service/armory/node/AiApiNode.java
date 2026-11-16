@@ -29,6 +29,11 @@ public class AiApiNode extends AbstractArmorySupport {
     protected AiAgentRegisterVO doApply(ArmoryCommandEntity requestParameter, DefaultArmoryFactory.DynamicContext dynamicContext) throws Exception {
         log.info("Ai Agent 装配操作 - AiApiNode");
 
+        // 用户自带 API 的场景：上下文里已经有 OpenAiApi，直接复用
+        if (null != dynamicContext.getOpenAiApi()) {
+            return router(requestParameter, dynamicContext);
+        }
+
         AiAgentConfigTableVO aiAgentConfigTableVO = requestParameter.getAiAgentConfigTableVO();
         AiAgentConfigTableVO.Module.AiApi aiApiConfig = aiAgentConfigTableVO.getModule().getAiApi();
 

@@ -20,4 +20,7 @@ public interface IAgentService {
     Response<ChatResponseDTO> chat(ChatRequestDTO requestDTO);
 
     ResponseBodyEmitter chatStream(ChatRequestDTO requestDTO);
+
+    /** 测试用户自带的模型 API 是否可用 */
+    Response<String> testApi(TestApiRequestDTO requestDTO);
 }

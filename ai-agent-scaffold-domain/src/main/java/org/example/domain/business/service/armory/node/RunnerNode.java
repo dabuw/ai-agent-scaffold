@@ -51,8 +51,10 @@ public class RunnerNode extends AbstractArmorySupport {
                 .runner(runner)
                 .build();
 
-        // 注册到 Spring 容器
-        registerBean(agentId, AiAgentRegisterVO.class, aiAgentRegisterVO);
+        // 注册到 Spring 容器（用户自带 API 时不注册，避免覆盖默认智能体）
+        if (!dynamicContext.isSkipRegisterBean()) {
+            registerBean(agentId, AiAgentRegisterVO.class, aiAgentRegisterVO);
+        }
 
         return aiAgentRegisterVO;
     }
