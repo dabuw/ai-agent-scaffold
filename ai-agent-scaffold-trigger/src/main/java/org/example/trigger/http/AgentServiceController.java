@@ -5,6 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.example.api.IAgentService;
 import org.example.api.dto.*;
 import org.example.api.response.Response;
+import org.example.domain.agent.model.entity.ChatCommandEntity;
 import org.example.domain.agent.model.valobj.AiAgentConfigTableVO;
 import org.example.domain.agent.model.valobj.UserApiConfigVO;
 import org.example.domain.business.service.IChatService;
@@ -14,7 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -27,6 +31,11 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/")
 @CrossOrigin(origins = "*")
 public class AgentServiceController implements IAgentService {
+
+    /** 单张图片最大 2MB、单次最多 3 张 */
+    private static final int MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+    private static final int MAX_IMAGE_COUNT = 3;
+    private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
 
     @Resource
     private IChatService chatService;
@@ -117,15 +126,22 @@ public class AgentServiceController implements IAgentService {
         try {
             log.info("智能体对话 agentId:{} userId:{}", requestDTO.getAgentId(), requestDTO.getUserId());
 
+            UserApiConfigVO apiConfig = toApiConfig(requestDTO.getApiBaseUrl(), requestDTO.getApiKey(), requestDTO.getModel());
+
             String sessionId = requestDTO.getSessionId();
             if (StringUtils.isBlank(sessionId)) {
-                sessionId = chatService.createSession(requestDTO.getAgentId(), requestDTO.getUserId(),
-                        toApiConfig(requestDTO.getApiBaseUrl(), requestDTO.getApiKey(), requestDTO.getModel()));
+                sessionId = chatService.createSession(requestDTO.getAgentId(), requestDTO.getUserId(), apiConfig);
             }
 
-            List<String> messages = chatService.handleMessage(requestDTO.getAgentId(), requestDTO.getUserId(),
-                    sessionId, requestDTO.getMessage(),
-                    toApiConfig(requestDTO.getApiBaseUrl(), requestDTO.getApiKey(), requestDTO.getModel()));
+            List<String> messages;
+            if (null != requestDTO.getImages() && !requestDTO.getImages().isEmpty()) {
+                // 带图片：走多模态内容
+                ChatCommandEntity commandEntity = buildImageCommand(requestDTO, sessionId);
+                messages = chatService.handleMessage(commandEntity, apiConfig);
+            } else {
+                messages = chatService.handleMessage(requestDTO.getAgentId(), requestDTO.getUserId(),
+                        sessionId, requestDTO.getMessage(), apiConfig);
+            }
 
             ChatResponseDTO responseDTO = new ChatResponseDTO();
             responseDTO.setContent(String.join("\n", messages));
@@ -211,6 +227,54 @@ public class AgentServiceController implements IAgentService {
                     .info("连接失败，请检查地址、Key 与模型名称")
                     .build();
         }
+    }
+
+    /**
+     * 把请求里的 base64 图片组装成多模态消息，并做数量/体积/格式校验。
+     */
+    private ChatCommandEntity buildImageCommand(ChatRequestDTO requestDTO, String sessionId) {
+        List<ChatImageDTO> images = requestDTO.getImages();
+        if (images.size() > MAX_IMAGE_COUNT) {
+            throw new AppException(ResponseCode.E0004.getCode(), "一次最多上传 " + MAX_IMAGE_COUNT + " 张图片");
+        }
+
+        List<ChatCommandEntity.Content.InlineData> inlineDatas = new ArrayList<>();
+        for (ChatImageDTO image : images) {
+            if (null == image || StringUtils.isBlank(image.getData())) {
+                continue;
+            }
+            String mimeType = StringUtils.defaultIfBlank(image.getMimeType(), "image/png").toLowerCase();
+            if (!ALLOWED_IMAGE_TYPES.contains(mimeType)) {
+                throw new AppException(ResponseCode.E0004.getCode(), "不支持的图片格式：" + mimeType);
+            }
+
+            byte[] bytes;
+            try {
+                bytes = Base64.getDecoder().decode(image.getData());
+            } catch (IllegalArgumentException e) {
+                throw new AppException(ResponseCode.E0004.getCode(), "图片数据解析失败，请重新上传");
+            }
+            if (bytes.length > MAX_IMAGE_BYTES) {
+                throw new AppException(ResponseCode.E0004.getCode(), "单张图片不能超过 2MB，请压缩后重试");
+            }
+
+            inlineDatas.add(new ChatCommandEntity.Content.InlineData(bytes, mimeType));
+        }
+
+        if (inlineDatas.isEmpty()) {
+            throw new AppException(ResponseCode.E0004.getCode(), "图片内容为空，请重新上传");
+        }
+
+        List<ChatCommandEntity.Content.Text> texts = new ArrayList<>();
+        texts.add(new ChatCommandEntity.Content.Text(StringUtils.defaultIfBlank(requestDTO.getMessage(), "请描述这张图片")));
+
+        return ChatCommandEntity.builder()
+                .agentId(requestDTO.getAgentId())
+                .userId(requestDTO.getUserId())
+                .sessionId(sessionId)
+                .texts(texts)
+                .inlineDatas(inlineDatas)
+                .build();
     }
 
     /**

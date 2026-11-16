@@ -41,7 +41,8 @@ class Element {
 
 function setup(script, { cookie = '', responses = [], storage = {} } = {}) {
   const ids = [
-    'agent-select', 'reload-agents', 'message', 'send', 'status', 'messages', 'chat-scroll', 'welcome',
+    'agent-select', 'reload-agents', 'agent-desc', 'welcome-title', 'welcome-text', 'message',
+    'attach', 'image-input', 'attachments', 'send', 'status', 'messages', 'chat-scroll', 'welcome',
     'account-name', 'chat-form', 'logout', 'api-entry', 'api-entry-title', 'api-entry-desc', 'api-entry-state',
     'session-hint', 'new-chat', 'export-chat', 'settings-modal', 'settings-close', 'cfg-base', 'cfg-key', 'cfg-model', 'cfg-status',
     'cfg-test', 'cfg-save', 'cfg-clear',
@@ -139,6 +140,7 @@ test('loads agents, streams a reply and reuses the session on the next turn', as
   });
   await tick();
   assert.equal(elements['agent-select'].options[0].textContent, '助手');
+  assert.equal(elements['welcome-title'].textContent, '你好，我是助手');
 
   elements.message.value = '你好';
   await submit(elements['chat-form']);

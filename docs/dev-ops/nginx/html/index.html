@@ -65,8 +65,11 @@
         <div class="topbar-left"><div class="breadcrumb">WORKSPACE <span>/</span> AI CHAT</div><h1>智能对话</h1></div>
         <div class="topbar-right">
           <div class="agent-picker">
-            <label for="agent-select">当前智能体</label>
-            <select id="agent-select" disabled><option value="">正在加载...</option></select>
+            <div class="agent-picker-main">
+              <label for="agent-select">当前智能体</label>
+              <select id="agent-select" disabled><option value="">正在加载...</option></select>
+            </div>
+            <span class="agent-desc" id="agent-desc"></span>
             <button id="reload-agents" type="button" hidden>重试</button>
           </div>
           <div class="topbar-actions">
@@ -85,8 +88,8 @@
           <section class="welcome" id="welcome">
             <div class="welcome-icon" aria-hidden="true">✦</div>
             <div class="welcome-tag"><span></span> YOUR AI PARTNER</div>
-            <h2>你好，有什么可以帮你？</h2>
-            <p>不管是探索灵感、解答疑问，还是处理任务，<br>你的智能伙伴都已准备就绪。</p>
+            <h2 id="welcome-title">你好，有什么可以帮你？</h2>
+            <p id="welcome-text">不管是探索灵感、解答疑问，还是处理任务，<br>你的智能伙伴都已准备就绪。</p>
           </section>
           <div id="messages" class="messages" role="log" aria-live="polite" aria-label="对话消息"></div>
         </div>
@@ -96,13 +99,20 @@
         <div class="composer-inner">
           <p id="status" class="status" role="status" aria-live="polite"></p>
           <form id="chat-form" class="composer">
+            <div class="attachments" id="attachments" hidden></div>
             <label class="sr-only" for="message">输入消息</label>
+            <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
             <textarea id="message" rows="1" placeholder="输入你的问题，开启一段对话..." disabled></textarea>
             <div class="composer-bottom">
               <span><span class="composer-sparkle">✧</span> Enter 发送 · Shift + Enter 换行</span>
-              <button id="send" class="send" type="submit" disabled aria-label="发送消息">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
+              <div class="composer-actions">
+                <button id="attach" class="attach-btn" type="button" title="上传图片（最多 3 张，单张 2MB 内）" aria-label="上传图片" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5 12.6 19a4.2 4.2 0 0 1-6-6l7.6-7.6a2.8 2.8 0 0 1 4 4l-7.5 7.5a1.4 1.4 0 0 1-2-2l6.9-6.9"/></svg>
+                </button>
+                <button id="send" class="send" type="submit" disabled aria-label="发送消息">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
             </div>
           </form>
           <p class="disclaimer">内容由 AI 生成，请仔细甄别重要信息。<span id="session-hint">每次提问将创建新的会话。</span></p>

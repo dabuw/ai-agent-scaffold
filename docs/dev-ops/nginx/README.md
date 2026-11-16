@@ -8,7 +8,8 @@
 
 - **自带 API Key**：右上角齿轮打开「API 设置」，填写 Base URL / API Key / 模型后可先「测试连接」再保存。配置保存在浏览器 `localStorage`，每次请求随请求体传给后端，后端用完即弃、不落库、不写日志。不填写时回落到服务端 yml 里的默认模型。
 - **多轮对话**：首轮创建会话，后续消息复用同一个 `sessionId`，模型可以记住上下文。
-- **流式输出**：对话走 `chat_stream` 接口，回复逐字出现。
+- **图片上传**：输入框左侧回形针选图，自动压缩到 1024px 内再以 base64 内联发送；最多 3 张、单张 2MB。带图片的消息走非流式接口 `/chat`。
+- **流式输出**：纯文本对话走 `chat_stream` 接口，回复逐字出现。
 - **Markdown 渲染**：标题、列表、引用、表格、代码块（含简易语法高亮）、链接都会被正确渲染；渲染前统一做 HTML 转义。
 - **对话管理**：顶部支持新建对话、导出为 Markdown 文件。
 - **错误提示**：Key 无效、无权限、额度不足、限流、超时等会被翻译成中文提示。
@@ -19,7 +20,7 @@
 |---|---|
 | `GET /api/v1/query_ai_agent_config_list` | 智能体列表 |
 | `POST /api/v1/create_session` | 创建会话（可带 `apiBaseUrl` / `apiKey` / `model`） |
-| `POST /api/v1/chat` | 非流式对话（返回完整内容 + `sessionId`） |
+| `POST /api/v1/chat` | 非流式对话（返回完整内容 + `sessionId`；`images` 字段传 base64 图片） |
 | `POST /api/v1/chat_stream` | 流式对话（返回原始文本流） |
 | `POST /api/v1/test_api` | 连通性测试 |
 

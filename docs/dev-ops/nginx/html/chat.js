@@ -24,6 +24,12 @@
   var messages = document.getElementById('messages');
   var chatScroll = document.getElementById('chat-scroll');
   var welcome = document.getElementById('welcome');
+  var agentDescEl = document.getElementById('agent-desc');
+  var welcomeTitle = document.getElementById('welcome-title');
+  var attachButton = document.getElementById('attach');
+  var imageInput = document.getElementById('image-input');
+  var attachmentsEl = document.getElementById('attachments');
+  var welcomeText = document.getElementById('welcome-text');
   var apiEntry = document.getElementById('api-entry');
   var apiEntryTitle = document.getElementById('api-entry-title');
   var apiEntryDesc = document.getElementById('api-entry-desc');
@@ -38,8 +44,11 @@
   var state = {
     busy: false,
     sessionId: null,
-    history: []
+    history: [],
+    images: []
   };
+
+  var MAX_IMAGES = 3;
 
   document.getElementById('account-name').textContent = userId;
 
@@ -118,7 +127,84 @@
     return String(text).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
   }
 
-  function addMessage(role, name, content, stateFlag) {
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('图片读取失败')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('图片解析失败')); };
+        img.onload = function () {
+          var max = 1024;
+          var scale = Math.min(1, max / Math.max(img.width, img.height));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          resolve({ mimeType: 'image/jpeg', data: dataUrl.split(',')[1], dataUrl: dataUrl });
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderAttachments() {
+    attachmentsEl.replaceChildren();
+    attachmentsEl.hidden = state.images.length === 0;
+    state.images.forEach(function (image, index) {
+      var item = document.createElement('div');
+      item.className = 'attachment';
+      var thumb = document.createElement('img');
+      thumb.src = image.dataUrl;
+      thumb.alt = '待发送图片 ' + (index + 1);
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'attachment-remove';
+      remove.setAttribute('aria-label', '移除图片');
+      remove.textContent = '×';
+      remove.addEventListener('click', function () {
+        state.images.splice(index, 1);
+        renderAttachments();
+        updateComposerState();
+      });
+      item.append(thumb, remove);
+      attachmentsEl.appendChild(item);
+    });
+  }
+
+  function updateComposerState() {
+    var canType = !state.busy && Boolean(agentSelect.value);
+    attachButton.disabled = !canType || state.images.length >= MAX_IMAGES;
+  }
+
+  async function handleImagePick(event) {
+    var files = Array.prototype.slice.call(event.target.files || []);
+    imageInput.value = '';
+    if (!files.length) return;
+
+    var room = MAX_IMAGES - state.images.length;
+    if (room <= 0) {
+      status.textContent = '最多上传 ' + MAX_IMAGES + ' 张图片。';
+      return;
+    }
+
+    for (var i = 0; i < Math.min(files.length, room); i++) {
+      try {
+        var compressed = await compressImage(files[i]);
+        state.images.push(compressed);
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+    if (files.length > room) status.textContent = '最多上传 ' + MAX_IMAGES + ' 张图片，多余的已忽略。';
+    renderAttachments();
+    updateComposerState();
+    messageInput.focus();
+  }
+
+  function addMessage(role, name, content, stateFlag, images) {
     welcome.hidden = true;
     var item = document.createElement('article');
     item.className = 'message ' + role + (stateFlag ? ' ' + stateFlag : '');
@@ -139,7 +225,20 @@
     if (role === 'assistant') {
       bubble.innerHTML = renderMarkdown(content);
     } else {
-      bubble.textContent = content;
+      if (images && images.length) {
+        var gallery = document.createElement('div');
+        gallery.className = 'bubble-images';
+        images.forEach(function (src) {
+          var thumb = document.createElement('img');
+          thumb.src = src;
+          thumb.alt = '发送的图片';
+          gallery.appendChild(thumb);
+        });
+        bubble.appendChild(gallery);
+      }
+      var textNode = document.createElement('span');
+      textNode.textContent = content;
+      bubble.appendChild(textNode);
     }
 
     body.append(meta, bubble);
@@ -149,11 +248,28 @@
     return { item: item, bubble: bubble };
   }
 
+  function selectedDesc() {
+    var option = agentSelect.options[agentSelect.selectedIndex];
+    return option && option.dataset ? (option.dataset.desc || '') : '';
+  }
+
+  function refreshAgentIntro() {
+    var name = agentSelect.options.length ? agentSelect.options[agentSelect.selectedIndex].textContent : '';
+    var desc = selectedDesc();
+    agentDescEl.textContent = desc;
+    agentDescEl.hidden = !desc;
+    if (name) {
+      welcomeTitle.textContent = '你好，我是' + name;
+      welcomeText.textContent = desc || '有什么可以帮你？直接输入问题就能开始。';
+    }
+  }
+
   function setControls() {
     var ready = Boolean(agentSelect.value) && !state.busy;
     agentSelect.disabled = state.busy || agentSelect.options.length === 0;
     messageInput.disabled = !ready;
     sendButton.disabled = !ready;
+    updateComposerState();
   }
 
   /* ---------------- 智能体 ---------------- */
@@ -173,7 +289,10 @@
         var option = document.createElement('option');
         option.value = agent.agentId;
         option.textContent = agent.agentName || agent.agentId;
-        if (agent.agentDesc) option.title = agent.agentDesc;
+        if (agent.agentDesc) {
+          option.title = agent.agentDesc;
+          option.dataset.desc = agent.agentDesc;
+        }
         agentSelect.appendChild(option);
       });
       if (!agents.length) {
@@ -186,6 +305,7 @@
       reloadAgents.hidden = false;
     }
     setControls();
+    refreshAgentIntro();
   }
 
   /* ---------------- 会话 ---------------- */
@@ -204,6 +324,9 @@
   function resetChat() {
     state.sessionId = null;
     state.history = [];
+    state.images = [];
+    renderAttachments();
+    updateComposerState();
     messages.replaceChildren();
     welcome.hidden = false;
     status.textContent = '';
@@ -253,8 +376,12 @@
     setControls();
     status.textContent = '';
 
-    addMessage('user', userId, message);
-    state.history.push({ role: 'user', name: userId, text: message });
+    var pendingImages = state.images.slice();
+    state.images = [];
+    renderAttachments();
+
+    addMessage('user', userId, message, null, pendingImages.map(function (img) { return img.dataUrl; }));
+    state.history.push({ role: 'user', name: userId, text: message, images: pendingImages.length });
     messageInput.value = '';
     messageInput.style.height = '';
 
@@ -271,17 +398,31 @@
         message: message
       }, apiFields());
 
-      var full = '';
-      var finalText = await streamReply(payload, function (_, accumulated) {
-        full = accumulated;
-        reply.bubble.textContent = accumulated;
-        chatScroll.scrollTop = chatScroll.scrollHeight;
-      });
+      var finalText = '';
+
+      if (pendingImages.length) {
+        // 带图片：走非流式接口，图片以 base64 内联传输
+        payload.images = pendingImages.map(function (img) {
+          return { mimeType: img.mimeType, data: img.data };
+        });
+        var data = await request('chat', payload);
+        finalText = (data && data.content) ? data.content : '';
+        reply.bubble.classList.remove('streaming');
+        reply.bubble.innerHTML = renderMarkdown(finalText || '（无回复内容）');
+      } else {
+        var full = '';
+        finalText = await streamReply(payload, function (_, accumulated) {
+          full = accumulated;
+          reply.bubble.textContent = accumulated;
+          chatScroll.scrollTop = chatScroll.scrollHeight;
+        });
+        reply.bubble.classList.remove('streaming');
+        reply.bubble.innerHTML = renderMarkdown(finalText || full || '（无回复内容）');
+        finalText = finalText || full;
+      }
 
       reply.item.classList.remove('pending');
-      reply.bubble.classList.remove('streaming');
-      reply.bubble.innerHTML = renderMarkdown(finalText || full || '（无回复内容）');
-      state.history.push({ role: 'assistant', name: agentName, text: finalText || full });
+      state.history.push({ role: 'assistant', name: agentName, text: finalText });
     } catch (error) {
       reply.item.classList.remove('pending');
       reply.bubble.classList.remove('streaming');
@@ -314,7 +455,7 @@
     state.history.forEach(function (item) {
       lines.push('### ' + (item.role === 'user' ? '我' : item.name));
       lines.push('');
-      lines.push(item.text);
+      lines.push(item.images ? item.text + '（含 ' + item.images + ' 张图片）' : item.text);
       lines.push('');
       lines.push('---');
       lines.push('');
@@ -403,7 +544,10 @@
   /* ---------------- 事件绑定 ---------------- */
 
   document.getElementById('chat-form').addEventListener('submit', submitMessage);
-  agentSelect.addEventListener('change', setControls);
+  agentSelect.addEventListener('change', function () {
+    refreshAgentIntro();
+    setControls();
+  });
   reloadAgents.addEventListener('click', loadAgents);
   document.getElementById('new-chat').addEventListener('click', newChat);
   document.getElementById('export-chat').addEventListener('click', exportChat);
@@ -418,6 +562,9 @@
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape' && !settingsModal.hidden) closeSettings();
   });
+
+  attachButton.addEventListener('click', function () { imageInput.click(); });
+  imageInput.addEventListener('change', handleImagePick);
 
   messageInput.addEventListener('input', function () {
     this.style.height = 'auto';

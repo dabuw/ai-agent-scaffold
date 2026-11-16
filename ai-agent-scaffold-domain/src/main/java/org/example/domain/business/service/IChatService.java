@@ -36,6 +36,9 @@ public interface IChatService {
 
     List<String> handleMessage(ChatCommandEntity chatCommandEntity);
 
+    /** 使用用户自带 API 处理多模态（文本 + 图片）消息 */
+    List<String> handleMessage(ChatCommandEntity chatCommandEntity, UserApiConfigVO apiConfig);
+
     /** 使用用户自带 API 做一次连通性测试，返回模型回复摘要 */
     String testApi(UserApiConfigVO apiConfig);
 

@@ -161,11 +161,14 @@ public class ChatService implements IChatService {
 
     @Override
     public List<String> handleMessage(ChatCommandEntity chatCommandEntity) {
-        AiAgentRegisterVO aiAgentRegisterVO = defaultArmoryFactory.getAiAgentRegisterVO(chatCommandEntity.getAgentId());
+        return handleMessage(chatCommandEntity, null);
+    }
 
-        if (null == aiAgentRegisterVO) {
-            throw new AppException(ResponseCode.E0001.getCode());
-        }
+    @Override
+    public List<String> handleMessage(ChatCommandEntity chatCommandEntity, UserApiConfigVO apiConfig) {
+        checkRateLimit(chatCommandEntity.getUserId());
+
+        AiAgentRegisterVO aiAgentRegisterVO = resolveAgent(chatCommandEntity.getAgentId(), apiConfig);
 
         List<Part> parts = new ArrayList<>();
 
@@ -193,13 +196,18 @@ public class ChatService implements IChatService {
         Content content = Content.builder().role("user").parts(parts).build();
 
         InMemoryRunner runner = aiAgentRegisterVO.getRunner();
+        String sessionId = StringUtils.isBlank(chatCommandEntity.getSessionId())
+                ? createSession(chatCommandEntity.getAgentId(), chatCommandEntity.getUserId(), apiConfig)
+                : chatCommandEntity.getSessionId();
 
-        Flowable<Event> events = runner.runAsync(chatCommandEntity.getUserId(), chatCommandEntity.getSessionId(), content);
-
-        List<String> outputs = new ArrayList<>();
-        events.blockingForEach(event -> outputs.add(event.stringifyContent()));
-
-        return outputs;
+        try {
+            List<String> outputs = new ArrayList<>();
+            runner.runAsync(chatCommandEntity.getUserId(), sessionId, content)
+                    .blockingForEach(event -> outputs.add(event.stringifyContent()));
+            return outputs;
+        } catch (Exception e) {
+            throw friendlyError(e, "对话失败");
+        }
     }
 
     /**

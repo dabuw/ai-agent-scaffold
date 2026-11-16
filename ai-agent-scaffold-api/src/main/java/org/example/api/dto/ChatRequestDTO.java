@@ -2,6 +2,8 @@ package org.example.api.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * @author dabuw
  * @description
@@ -25,5 +27,8 @@ public class ChatRequestDTO {
     /** 模型名称，例如 deepseek-chat */
     private String model;
 
+
+    /** 随消息一起发送的图片（base64），最多 3 张 */
+    private List<ChatImageDTO> images;
 }
 

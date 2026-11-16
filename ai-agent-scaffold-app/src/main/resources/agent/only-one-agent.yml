@@ -2,15 +2,15 @@ ai:
   agent:
     config:
       tables:
-        testAgent:
-          app-name: testAgent02
+        # ---------------- 1. 学习规划师（联网检索 + 技能） ----------------
+        learningAgent:
+          app-name: learningAgent
           agent:
             agent-id: 100002
-            agent-name: 单一智能体
-            agent-desc: 单一智能体
+            agent-name: 学习规划师
+            agent-desc: 联网检索项目资料，按阶段给出学习计划
           module:
             ai-api:
-              # DeepSeek（OpenAI 兼容协议），key 从 .env 读取，不写死在文件里
               base-url: https://api.deepseek.com
               api-key: ${DEEPSEEK_API_KEY:}
               completions-path: v1/chat/completions
@@ -21,7 +21,6 @@ ai:
                 - sse:
                     name: baidu-search
                     base-uri: http://appbuilder.baidu.com/v2/ai_search/mcp/
-                    # key 在 https://console.bce.baidu.com/iam/#/iam/apikey/list 申请，填到 .env
                     sse-endpoint: sse?api_key=${BAIDU_MCP_API_KEY:}
                     request-timeout: 5000
                 - local:
@@ -30,14 +29,130 @@ ai:
                 - type: resource
                   path: agent/skills
             agents:
-              - name: onlyAgent
+              - name: learningAgent
                 description: 学习项目计划
                 instruction: |
-                  通过百度检索编程实战项目，并根据检索内容，针对初学用户给出学习计划。
-                  调用搜索工具时只允许传 query 和 resource_type_filter 参数，禁止传 model、instruction、temperature、top_p 等可选参数（传 model 会触发百度 invalid_appId 权限错误）。
+                  你是一名学习规划师。先用搜索工具核实项目信息，再给出可执行的学习计划。
+                  调用搜索工具时只允许传 query 和 resource_type_filter 参数，禁止传 model、instruction、temperature、top_p 等可选参数。
+                  输出要求：按阶段拆解，每个阶段给出目标、内容和验收标准，控制在 400 字以内。
                 output-key: generated_code
             runner:
-              agent-name: onlyAgent
+              agent-name: learningAgent
+              plugin-name-list:
+                - myTestPlugin
+                - myLogPlugin
+
+        # ---------------- 2. 通用助手（纯聊天） ----------------
+        chatAgent:
+          app-name: chatAgent
+          agent:
+            agent-id: 100003
+            agent-name: 通用助手
+            agent-desc: 日常问答与闲聊，回答简洁直接
+          module:
+            ai-api:
+              base-url: https://api.deepseek.com
+              api-key: ${DEEPSEEK_API_KEY:}
+              completions-path: v1/chat/completions
+            chat-model:
+              model: deepseek-chat
+            agents:
+              - name: chatAgent
+                description: 通用对话助手
+                instruction: |
+                  你是一个友好、简洁的通用助手，用中文回答。
+                  要求：先给结论再补充必要细节，控制在 200 字以内；
+                  不确定的事情要直说不确定，不要编造事实或数据。
+                output-key: generated_code
+            runner:
+              agent-name: chatAgent
+              plugin-name-list:
+                - myTestPlugin
+                - myLogPlugin
+
+        # ---------------- 3. 代码搭档（纯聊天） ----------------
+        codeAgent:
+          app-name: codeAgent
+          agent:
+            agent-id: 100004
+            agent-name: 代码搭档
+            agent-desc: 写代码、解释报错、给最小可运行示例
+          module:
+            ai-api:
+              base-url: https://api.deepseek.com
+              api-key: ${DEEPSEEK_API_KEY:}
+              completions-path: v1/chat/completions
+            chat-model:
+              model: deepseek-chat
+            agents:
+              - name: codeAgent
+                description: Java 代码助手
+                instruction: |
+                  你是一名资深 Java 工程师，帮用户写代码、读代码、排查报错。
+                  输出要求：
+                  1. 先一句话说明思路，再给代码；
+                  2. 代码必须用 ```java 代码块包裹，只给最小可运行示例；
+                  3. 涉及报错时，先说最可能的原因，再给修复代码；
+                  4. 不确定的 API 要明确说明，不要臆造。
+                output-key: generated_code
+            runner:
+              agent-name: codeAgent
+              plugin-name-list:
+                - myTestPlugin
+                - myLogPlugin
+
+        # ---------------- 4. 写作润色（纯聊天） ----------------
+        writingAgent:
+          app-name: writingAgent
+          agent:
+            agent-id: 100005
+            agent-name: 写作润色
+            agent-desc: 改写、润色、写文案，给多个版本供选择
+          module:
+            ai-api:
+              base-url: https://api.deepseek.com
+              api-key: ${DEEPSEEK_API_KEY:}
+              completions-path: v1/chat/completions
+            chat-model:
+              model: deepseek-chat
+            agents:
+              - name: writingAgent
+                description: 中文写作与润色
+                instruction: |
+                  你是一名中文写作编辑，负责润色、改写和写文案。
+                  要求：先指出原文最主要的问题（一句话），再给出 1 个推荐版本；
+                  必要时再补 1 个风格不同的备选。不要解释语法术语，直接给结果。
+                output-key: generated_code
+            runner:
+              agent-name: writingAgent
+              plugin-name-list:
+                - myTestPlugin
+                - myLogPlugin
+
+        # ---------------- 5. 翻译官（纯聊天） ----------------
+        translateAgent:
+          app-name: translateAgent
+          agent:
+            agent-id: 100006
+            agent-name: 翻译官
+            agent-desc: 中英互译，保留术语，附直译与意译
+          module:
+            ai-api:
+              base-url: https://api.deepseek.com
+              api-key: ${DEEPSEEK_API_KEY:}
+              completions-path: v1/chat/completions
+            chat-model:
+              model: deepseek-chat
+            agents:
+              - name: translateAgent
+                description: 中英翻译
+                instruction: |
+                  你是一名中英翻译。自动判断方向（中文译英、英文译中）。
+                  要求：先给「推荐译文」，再给一行「直译」；
+                  专业术语保留原文并在括号内注明，不要额外解释或加戏。
+                output-key: generated_code
+            runner:
+              agent-name: translateAgent
               plugin-name-list:
                 - myTestPlugin
                 - myLogPlugin
