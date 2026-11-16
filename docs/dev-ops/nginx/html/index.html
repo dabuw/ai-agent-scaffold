@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
   <title>智能对话 | AI Agent</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20261116">
   <script>
     if (!document.cookie.split(';').some(part => part.trim() === 'ai_agent_demo_user=admin')) {
       location.replace('login.html');
@@ -22,6 +22,11 @@
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span>AI AGENT<small>INTELLIGENT WORKSPACE</small></span>
       </div>
+
+      <a class="back-home" href="https://dabuw.online/" aria-label="返回作品集" title="返回作品集">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8M5.5 9.5V21h13V9.5"/></svg>
+        <span class="back-home-label">返回作品集</span>
+      </a>
 
       <div class="sidebar-content">
         <div class="section-label">WORKSPACE</div>
@@ -103,6 +108,10 @@
           <p class="disclaimer">内容由 AI 生成，请仔细甄别重要信息。<span id="session-hint">每次提问将创建新的会话。</span></p>
         </div>
       </div>
+
+      <footer class="site-beian">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">新ICP备2026009541号-1</a>
+      </footer>
     </main>
   </div>
 

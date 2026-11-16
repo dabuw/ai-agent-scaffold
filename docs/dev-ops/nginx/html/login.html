@@ -145,6 +145,29 @@
       gap: 12px;
     }
 
+    header.brand .back-home {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 252, 247, 0.72);
+      font-size: 12px;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      transition: color .18s, border-color .18s, background .18s;
+    }
+    header.brand .back-home:hover {
+      color: var(--apple-deep);
+      border-color: rgba(143, 203, 58, 0.5);
+      background: #fff;
+    }
+    header.brand .back-home svg { width: 15px; height: 15px; flex: 0 0 15px; }
+
     .logo {
       width: 40px;
       height: 40px;
@@ -406,17 +429,34 @@
 
     footer.foot {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
+      justify-content: center;
+      gap: 6px;
       padding-top: 8px;
       font-family: "Outfit", sans-serif;
       font-size: 11px;
       letter-spacing: 0.14em;
       color: #8A907C;
+      text-align: center;
     }
 
     footer.foot span.split { opacity: 0.45; margin: 0 8px; }
+
+    footer.foot .beian {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+    footer.foot .beian a {
+      color: inherit;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(138, 144, 124, 0.35);
+    }
+    footer.foot .beian a:hover {
+      color: var(--apple-deep);
+      border-bottom-color: currentColor;
+    }
 
     [hidden] { display: none !important; }
 
@@ -428,6 +468,9 @@
         padding: 28px 0;
       }
       .card-wrap { justify-content: stretch; }
+      header.brand .back-home { width: 38px; height: 38px; padding: 0; justify-content: center; }
+      header.brand .back-home span { display: none; }
+      footer.foot .beian { width: 100%; text-align: center; }
       .card { max-width: none; }
       .bg .ring { display: none; }
       h1 { font-size: 40px; }
@@ -459,6 +502,10 @@
         </svg>
       </div>
       <div class="wordmark">AI AGENT</div>
+      <a class="back-home" href="https://dabuw.online/" aria-label="返回作品集" title="返回作品集">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8M5.5 9.5V21h13V9.5"/></svg>
+        <span>返回作品集</span>
+      </a>
     </header>
 
     <main class="stage">
@@ -526,6 +573,9 @@
 
     <footer class="foot">
       <div>AI AGENT <span class="split">/</span> BUILD SOMETHING EXTRAORDINARY</div>
+      <div class="beian">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">新ICP备2026009541号-1</a>
+      </div>
     </footer>
   </div>
 
