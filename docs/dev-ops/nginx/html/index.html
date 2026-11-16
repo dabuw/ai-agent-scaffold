@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>智能对话 | AI Agent</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    if (!document.cookie.split(';').some(part => part.trim() === 'ai_agent_demo_user=admin')) {
+      location.replace('login.html');
+    }
+  </script>
+  <script src="config.js" defer></script>
+  <script src="chat.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span>AI AGENT<small>INTELLIGENT WORKSPACE</small></span>
+      </div>
+
+      <div class="sidebar-content">
+        <div class="section-label">WORKSPACE</div>
+        <div class="nav-item"><span aria-hidden="true">◈</span> 智能对话 <span class="nav-dot"></span></div>
+        <div class="sidebar-note">
+          <div class="note-icon" aria-hidden="true">✦</div>
+          <strong>灵感，从这里开始</strong>
+          <p>选择一个智能体，开始探索更多可能。</p>
+        </div>
+      </div>
+
+      <div class="account">
+        <div class="avatar user-avatar" aria-hidden="true">A</div>
+        <div class="account-info"><strong id="account-name">admin</strong><span>演示账号</span></div>
+        <button id="logout" class="logout" type="button" aria-label="退出登录" title="退出登录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M10 17v2H5V5h5v2M14 8l4 4-4 4M8 12h10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div><div class="breadcrumb">WORKSPACE <span>/</span> AI CHAT</div><h1>智能对话</h1></div>
+        <div class="agent-picker">
+          <label for="agent-select">当前智能体</label>
+          <select id="agent-select" disabled><option value="">正在加载...</option></select>
+          <button id="reload-agents" type="button" hidden>重试</button>
+        </div>
+      </header>
+
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="chat-content">
+          <section class="welcome" id="welcome">
+            <div class="welcome-icon" aria-hidden="true">✦</div>
+            <div class="welcome-tag"><span></span> YOUR AI PARTNER</div>
+            <h2>你好，有什么可以帮你？</h2>
+            <p>不管是探索灵感、解答疑问，还是处理任务，<br>你的智能伙伴都已准备就绪。</p>
+          </section>
+          <div id="messages" class="messages" role="log" aria-live="polite" aria-label="对话消息"></div>
+        </div>
+      </div>
+
+      <div class="composer-area">
+        <div class="composer-inner">
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+          <form id="chat-form" class="composer">
+            <label class="sr-only" for="message">输入消息</label>
+            <textarea id="message" rows="1" placeholder="输入你的问题，开启一段对话..." disabled></textarea>
+            <div class="composer-bottom">
+              <span><span class="composer-sparkle">✧</span> AI Agent 为你提供灵感与帮助</span>
+              <button id="send" class="send" type="submit" disabled aria-label="发送消息">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </form>
+          <p class="disclaimer">内容由 AI 生成，请仔细甄别重要信息。<span>每次提问将创建新的会话。</span></p>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

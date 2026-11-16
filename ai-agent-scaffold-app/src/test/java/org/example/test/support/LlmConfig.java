@@ -46,6 +46,25 @@ public final class LlmConfig {
         return get("DEEPSEEK_MODEL", DEFAULT_MODEL);
     }
 
+    /**
+     * 多模态用例使用的模型。DeepSeek 目前没有视觉模型，需要跑图片用例时在 .env 里配置
+     * VISION_BASE_URL / VISION_API_KEY / VISION_MODEL 指向支持图片输入的服务。
+     */
+    public static String visionModel() {
+        return get("VISION_MODEL", model());
+    }
+
+    /** 多模态用例使用的 baseUrl（默认复用 DEEPSEEK_BASE_URL） */
+    public static String visionBaseUrl() {
+        return get("VISION_BASE_URL", baseUrl());
+    }
+
+    /** 多模态用例使用的 apiKey（默认复用 DEEPSEEK_API_KEY） */
+    public static String visionApiKey() {
+        String value = get("VISION_API_KEY", null);
+        return (value == null || value.isBlank()) ? apiKey() : value;
+    }
+
     public static String apiKey() {
         return required("DEEPSEEK_API_KEY",
                 "没有找到可用的 DEEPSEEK_API_KEY，请填到 .env（项目根目录或 docs/dev-ops/api/.env），"
@@ -81,6 +100,18 @@ public final class LlmConfig {
         return OpenAiChatModel.builder()
                 .openAiApi(openAiApi())
                 .defaultOptions(OpenAiChatOptions.builder().model(model()).build())
+                .build();
+    }
+
+    /** 多模态用例使用的 ChatModel */
+    public static ChatModel visionChatModel() {
+        return OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .baseUrl(visionBaseUrl())
+                        .apiKey(visionApiKey())
+                        .completionsPath("v1/chat/completions")
+                        .build())
+                .defaultOptions(OpenAiChatOptions.builder().model(visionModel()).build())
                 .build();
     }
 

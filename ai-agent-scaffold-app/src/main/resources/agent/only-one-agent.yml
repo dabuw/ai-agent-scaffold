@@ -24,12 +24,20 @@ ai:
                     # key 在 https://console.bce.baidu.com/iam/#/iam/apikey/list 申请，填到 .env
                     sse-endpoint: sse?api_key=${BAIDU_MCP_API_KEY:}
                     request-timeout: 5000
+                - local:
+                    name: myToolCallbackProvider
+              tool-skills-list:
+                - type: resource
+                  path: agent/skills
             agents:
               - name: onlyAgent
                 description: 学习项目计划
                 instruction: |
-                  通过百度检索小傅哥编程实战项目，并根据检索内容，针对初学用户给出学习计划。
+                  通过百度检索编程实战项目，并根据检索内容，针对初学用户给出学习计划。
                   调用搜索工具时只允许传 query 和 resource_type_filter 参数，禁止传 model、instruction、temperature、top_p 等可选参数（传 model 会触发百度 invalid_appId 权限错误）。
                 output-key: generated_code
             runner:
               agent-name: onlyAgent
+              plugin-name-list:
+                - myTestPlugin
+                - myLogPlugin

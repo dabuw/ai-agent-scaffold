@@ -13,9 +13,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.util.MimeTypeUtils;
 
 import javax.annotation.Resource;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -63,10 +66,38 @@ public class AiAgentAutoConfigTest {
         InMemoryRunner runner = aiAgentRegisterVO.getRunner();
 
         Session session = runner.sessionService()
+                .createSession(appName, "dabuw02")
+                .blockingGet();
+
+        Content userMsg = Content.fromParts(Part.fromText("把dabuw转换为大写"));
+        Flowable<Event> events = runner.runAsync("dabuw02", session.id(), userMsg);
+
+        List<String> outputs = new ArrayList<>();
+        events.blockingForEach(event -> outputs.add(event.stringifyContent()));
+
+        log.info("测试结果:{}", JSON.toJSONString(outputs));
+    }
+
+    /**
+     * 多模态用例：把 dog.png 作为图片输入交给智能体。
+     * 需要模型支持图片输入，DeepSeek 暂无视觉模型，先配好 VISION_MODEL / VISION_BASE_URL / VISION_API_KEY 再跑。
+     */
+    @Test
+    public void test_handlerMessage_02_image() throws IOException {
+        AiAgentRegisterVO aiAgentRegisterVO = applicationContext.getBean("100002", AiAgentRegisterVO.class);
+
+        String appName = aiAgentRegisterVO.getAppName();
+        InMemoryRunner runner = aiAgentRegisterVO.getRunner();
+
+        Session session = runner.sessionService()
                 .createSession(appName, "dabuw")
                 .blockingGet();
 
-        Content userMsg = Content.fromParts(Part.fromText("给我一份学习计划"));
+        org.springframework.core.io.Resource resource = new ClassPathResource("file/dog.png");
+        Content userMsg = Content.fromParts(
+                Part.fromText("请描述这张图片的主要内容，并说明图中物品的可能用途。"),
+                Part.fromBytes(resource.getContentAsByteArray(), MimeTypeUtils.IMAGE_PNG_VALUE));
+
         Flowable<Event> events = runner.runAsync("dabuw", session.id(), userMsg);
 
         List<String> outputs = new ArrayList<>();

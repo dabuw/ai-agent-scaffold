@@ -2,7 +2,7 @@ package org.example.domain.business.service.armory.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.google.adk.agents.LlmAgent;
-import com.google.adk.models.springai.SpringAI;
+import org.example.domain.business.service.armory.matter.springai.MediaAwareSpringAI;
 import lombok.extern.slf4j.Slf4j;
 import org.example.domain.agent.model.entity.ArmoryCommandEntity;
 import org.example.domain.agent.model.valobj.AiAgentConfigTableVO;
@@ -40,7 +40,7 @@ public class AgentNode extends AbstractArmorySupport {
             LlmAgent llmAgent = LlmAgent.builder()
                     .name(agentConfig.getName())
                     .description(agentConfig.getDescription())
-                    .model(new SpringAI(chatModel))
+                    .model(new MediaAwareSpringAI(chatModel))
                     .instruction(agentConfig.getInstruction())
                     .outputKey(agentConfig.getOutputKey())
                     .build();

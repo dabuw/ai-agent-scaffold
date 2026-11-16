@@ -10,9 +10,11 @@ import lombok.NoArgsConstructor;
 import org.example.domain.agent.model.entity.ArmoryCommandEntity;
 import org.example.domain.agent.model.valobj.AiAgentConfigTableVO;
 import org.example.domain.agent.model.valobj.AiAgentRegisterVO;
+import org.example.domain.agent.model.valobj.properties.AiAgentAutoConfigProperties;
 import org.example.domain.business.service.armory.node.RootNode;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -28,11 +30,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class DefaultArmoryFactory {
 
     @Resource
+    private ApplicationContext applicationContext;
+
+    @Resource
     private RootNode rootNode;
 
     public StrategyHandler<ArmoryCommandEntity, DynamicContext, AiAgentRegisterVO> armoryStrategyHandler() {
         return rootNode;
     }
+
+    public AiAgentRegisterVO getAiAgentRegisterVO(String agentId) {
+        return applicationContext.getBean(agentId, AiAgentRegisterVO.class);
+    }
+
+
 
     /**
      * 定义一个上下文对象，用于各个节点串联的时候，写入数据和使用数据
