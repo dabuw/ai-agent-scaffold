@@ -161,6 +161,38 @@ test('loads agents, streams a reply and reuses the session on the next turn', as
   assert.equal(JSON.parse(calls[calls.length - 1].options.body).sessionId, 's1');
 });
 
+test('switching agent starts a new session instead of reusing the old one', async () => {
+  const { elements, calls } = setup(chatScript, {
+    cookie: 'ai_agent_demo_user=admin',
+    responses: [
+      success([{ agentId: 'a', agentName: '翻译官' }, { agentId: 'b', agentName: '写作润色' }]),
+      success({ sessionId: 's1' }),
+      { stream: '译文' },
+      success({ sessionId: 's2' }),
+      { stream: '润色结果' }
+    ]
+  });
+  await tick();
+
+  elements.message.value = '你能做什么';
+  await submit(elements['chat-form']);
+  assert.equal(JSON.parse(calls[2].options.body).sessionId, 's1');
+
+  // 切换智能体后，会话应重置
+  elements['agent-select'].value = 'b';
+  elements['agent-select'].selectedIndex = 1;
+  elements['agent-select'].listeners.change();
+  assert.match(elements.status.textContent, /已切换智能体/);
+
+  elements.message.value = '你能做什么';
+  await submit(elements['chat-form']);
+
+  const createCall = calls[calls.length - 2];
+  assert.equal(createCall.url, 'http://127.0.0.1:8091/api/v1/create_session');
+  assert.equal(JSON.parse(createCall.options.body).agentId, 'b');
+  assert.equal(JSON.parse(calls[calls.length - 1].options.body).sessionId, 's2');
+});
+
 test('failed session creation keeps the draft and shows the reason', async () => {
   const { elements, calls } = setup(chatScript, {
     cookie: 'ai_agent_demo_user=admin',

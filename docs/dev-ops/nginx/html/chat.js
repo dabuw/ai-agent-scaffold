@@ -347,7 +347,9 @@
         var parsed = await response.json();
         info = parsed && parsed.info ? parsed.info : '';
       } catch (e) { /* ignore */ }
-      throw new Error(info || ('流式请求失败（HTTP ' + response.status + '）'));
+      if (info) throw new Error(info);
+      if (response.status === 500) throw new Error('服务端处理失败，请稍后重试');
+      throw new Error('流式请求失败（HTTP ' + response.status + '）');
     }
 
     var reader = response.body.getReader();
@@ -545,8 +547,13 @@
 
   document.getElementById('chat-form').addEventListener('submit', submitMessage);
   agentSelect.addEventListener('change', function () {
+    // 切换智能体后上下文不再通用，重置会话（保留已展示的对话记录）
+    state.sessionId = null;
     refreshAgentIntro();
     setControls();
+    if (state.history.length) {
+      status.textContent = '已切换智能体，下一轮将开启新的上下文。';
+    }
   });
   reloadAgents.addEventListener('click', loadAgents);
   document.getElementById('new-chat').addEventListener('click', newChat);

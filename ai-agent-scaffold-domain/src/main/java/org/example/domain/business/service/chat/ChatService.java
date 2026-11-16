@@ -32,6 +32,7 @@ import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -124,9 +125,7 @@ public class ChatService implements IChatService {
 
         AiAgentRegisterVO registerVO = resolveAgent(agentId, apiConfig);
         InMemoryRunner runner = registerVO.getRunner();
-        String useSessionId = StringUtils.isBlank(sessionId)
-                ? createSession(agentId, userId, apiConfig)
-                : sessionId;
+        String useSessionId = ensureSession(runner, registerVO.getAppName(), userId, sessionId, agentId, apiConfig);
 
         Content userMsg = Content.fromParts(Part.fromText(message));
 
@@ -151,9 +150,7 @@ public class ChatService implements IChatService {
 
         AiAgentRegisterVO registerVO = resolveAgent(agentId, apiConfig);
         InMemoryRunner runner = registerVO.getRunner();
-        String useSessionId = StringUtils.isBlank(sessionId)
-                ? createSession(agentId, userId, apiConfig)
-                : sessionId;
+        String useSessionId = ensureSession(runner, registerVO.getAppName(), userId, sessionId, agentId, apiConfig);
 
         Content userMsg = Content.fromParts(Part.fromText(message));
         return runner.runAsync(userId, useSessionId, userMsg);
@@ -196,9 +193,8 @@ public class ChatService implements IChatService {
         Content content = Content.builder().role("user").parts(parts).build();
 
         InMemoryRunner runner = aiAgentRegisterVO.getRunner();
-        String sessionId = StringUtils.isBlank(chatCommandEntity.getSessionId())
-                ? createSession(chatCommandEntity.getAgentId(), chatCommandEntity.getUserId(), apiConfig)
-                : chatCommandEntity.getSessionId();
+        String sessionId = ensureSession(runner, aiAgentRegisterVO.getAppName(), chatCommandEntity.getUserId(),
+                chatCommandEntity.getSessionId(), chatCommandEntity.getAgentId(), apiConfig);
 
         try {
             List<String> outputs = new ArrayList<>();
@@ -312,6 +308,29 @@ public class ChatService implements IChatService {
             }
         }
         return null;
+    }
+
+    /**
+     * 复用已有会话；如果会话不存在（例如切换智能体后沿用了上一个智能体的 sessionId），
+     * 自动创建一个新会话，避免下游 runner 抛 "session not found"。
+     */
+    private String ensureSession(InMemoryRunner runner, String appName, String userId, String sessionId,
+                                 String agentId, UserApiConfigVO apiConfig) {
+        if (StringUtils.isBlank(sessionId)) {
+            return createSession(agentId, userId, apiConfig);
+        }
+        try {
+            Session session = runner.sessionService()
+                    .getSession(appName, userId, sessionId, Optional.empty())
+                    .blockingGet();
+            if (null != session) {
+                return sessionId;
+            }
+        } catch (Exception ignored) {
+            // 会话不存在或不属于当前智能体，走下面重建
+        }
+        log.info("会话不可复用，自动重建。agentId:{} userId:{} sessionId:{}", agentId, userId, sessionId);
+        return createSession(agentId, userId, apiConfig);
     }
 
     private void checkRateLimit(String userId) {
